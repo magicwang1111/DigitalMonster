@@ -45,8 +45,9 @@ def export(source):
             cells.append(cell.crop(box))
     scale = min(220/max(c.width for c in cells), 220/max(c.height for c in cells))
     bottom=238
-    idle_path=ROOT/(source.stem.removesuffix('-walk')+'-idle.gif')
-    if source.stem.endswith('-walk') and idle_path.exists():
+    action=source.stem.rsplit('-',1)[-1]
+    idle_path=ROOT/(source.stem.rsplit('-',1)[0]+'-idle.gif')
+    if action in ('walk','feed','pet','bread') and idle_path.exists():
         with Image.open(idle_path) as idle:
             reference=idle.convert('RGBA').getbbox()
         scale=(reference[3]-reference[1])/max(c.height for c in cells)
