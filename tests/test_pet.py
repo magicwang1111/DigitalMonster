@@ -4,6 +4,16 @@ from pathlib import Path
 
 
 class PetTests(unittest.TestCase):
+    def test_bread_easter_egg_is_persisted_every_sixteen_feeds(self):
+        from digitalmon.store import Store
+        from digitalmon.pet import interact
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(Path(tmp)/'life.sqlite')
+            for _ in range(15):
+                self.assertEqual(interact(store, 'feed')['snack'], 'round_bread')
+            self.assertEqual(interact(store, 'feed')['snack'], 'guilmon_bread')
+            self.assertEqual(interact(Store(Path(tmp)/'life.sqlite'), 'feed')['snack'], 'round_bread')
+
     def test_interaction_persists_but_does_not_fake_learning(self):
         from digitalmon.store import Store
         from digitalmon.pet import interact, status

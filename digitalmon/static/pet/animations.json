@@ -19,12 +19,9 @@
   },
   "guilmon-feed": {
     "frames": 12,
-    "fps": 10,
-    "size": [
-      256,
-      256
-    ],
-    "method": "procedural sprite motion and interaction effects"
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\guilmon-feed.png"
   },
   "guilmon-evolve": {
     "frames": 12,
@@ -55,12 +52,9 @@
   },
   "growlmon-feed": {
     "frames": 12,
-    "fps": 10,
-    "size": [
-      256,
-      256
-    ],
-    "method": "procedural sprite motion and interaction effects"
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\growlmon-feed.png"
   },
   "growlmon-evolve": {
     "frames": 12,
@@ -91,12 +85,9 @@
   },
   "wargrowlmon-feed": {
     "frames": 12,
-    "fps": 10,
-    "size": [
-      256,
-      256
-    ],
-    "method": "procedural sprite motion and interaction effects"
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\wargrowlmon-feed.png"
   },
   "wargrowlmon-evolve": {
     "frames": 12,
@@ -127,12 +118,9 @@
   },
   "gallantmon-feed": {
     "frames": 12,
-    "fps": 10,
-    "size": [
-      256,
-      256
-    ],
-    "method": "procedural sprite motion and interaction effects"
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-feed.png"
   },
   "gallantmon-evolve": {
     "frames": 12,
@@ -142,5 +130,47 @@
       256
     ],
     "method": "procedural sprite motion and interaction effects"
+  },
+  "guilmon-bread": {
+    "frames": 4,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\guilmon-bread.png"
+  },
+  "gallantmon-cm-feed": {
+    "frames": 12,
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-cm-feed.png"
+  },
+  "gallantmon-x-feed": {
+    "frames": 12,
+    "duration_ms": 180,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-x-feed.png"
+  },
+  "gallantmon-cm-idle": {
+    "frames": 4,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-cm-idle.png"
+  },
+  "gallantmon-cm-pet": {
+    "frames": 4,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-cm-pet.png"
+  },
+  "gallantmon-x-idle": {
+    "frames": 4,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-x-idle.png"
+  },
+  "gallantmon-x-pet": {
+    "frames": 4,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-x-pet.png"
   }
 }

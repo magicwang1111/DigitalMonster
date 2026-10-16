@@ -63,8 +63,11 @@ def interact(store, action):
         pet['interactions'] += 1
         pet['last_action'] = {'kind': action, 'time': time.time()}
         if action == 'feed':
+            pet['feed_count'] = pet.get('feed_count', 0) + 1
             s['world']['energy'] = min(40, s['world']['energy']+5)
         store._save(c, s)
         store._event(c, 'interaction', {'action': action, 'simulated': True})
-    return {'action': action, 'reply': replies[action], 'bond': pet['bond'], 'simulated': True}
+    snack = 'guilmon_bread' if action == 'feed' and pet['feed_count'] % 16 == 0 else 'round_bread'
+    return {'action': action, 'reply': '发现隐藏彩蛋：基尔兽面包！' if action == 'feed' and snack == 'guilmon_bread' else replies[action],
+            'snack': snack if action == 'feed' else None, 'bond': pet['bond'], 'simulated': True}
 

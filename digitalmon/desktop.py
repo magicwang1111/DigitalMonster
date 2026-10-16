@@ -33,6 +33,7 @@ class Companion:
         self.messages = queue.Queue()
         self.closed = threading.Event()
         self.stage = -1
+        self.form_override = None
         self.animation = 'idle'
         self.animation_until = 0
         self.frame_number = 0
@@ -119,19 +120,21 @@ class Companion:
             return
         sheet = Image.open(ROOT/'digitalmon'/'static'/'pet'/'evolution-pixel.png').convert('RGBA')
         w, h = sheet.size
-        x, y = stage % 2, stage // 2
+        x, y = min(stage,3) % 2, min(stage,3) // 2
         sprite = sheet.crop((x*w//2, y*h//2, (x+1)*w//2, (y+1)*h//2))
         sprite.thumbnail((245,245), Image.Resampling.NEAREST)
         self.photo = ImageTk.PhotoImage(sprite)
         self.canvas.itemconfig(self.sprite, image=self.photo)
         self.stage = stage
         self.frames = {}
-        for action in ('idle', 'pet', 'feed', 'evolve'):
-            path = ROOT/'digitalmon'/'static'/'pet'/f'{["guilmon","growlmon","wargrowlmon","gallantmon"][stage]}-{action}.gif'
+        for action in ('idle', 'pet', 'feed', 'evolve', 'bread'):
+            path = ROOT/'digitalmon'/'static'/'pet'/f'{["guilmon","growlmon","wargrowlmon","gallantmon","gallantmon-cm","gallantmon-x"][stage]}-{action}.gif'
             if path.exists():
                 from PIL import ImageSequence
                 with Image.open(path) as gif:
                     self.frames[action] = [ImageTk.PhotoImage(f.convert('RGBA')) for f in ImageSequence.Iterator(gif)]
+        if stage >= 4 and not self.frames.get('idle') and self.frames.get('feed'):
+            self.frames['idle'] = [self.frames['feed'][-1]]
 
     def animate(self):
         if self.closed.is_set():
@@ -142,7 +145,7 @@ class Companion:
         if frames:
             self.canvas.itemconfig(self.sprite, image=frames[self.frame_number % len(frames)])
             self.frame_number += 1
-        self.root.after(100, self.animate)
+        self.root.after(400 if self.animation == 'bread' else 180 if self.animation == 'feed' else 100, self.animate)
 
     def pump(self):
         try:
@@ -150,10 +153,20 @@ class Companion:
                 kind, value = self.messages.get_nowait()
                 if kind == 'state':
                     self.pet = value
-                    self.load_sprite(value['stage'])
-                    self.name.set(value['name']+' · '+value['form'])
+                    previous_stage = self.stage
+                    self.load_sprite(self.form_override if self.form_override is not None else value['stage'])
+                    if self.form_override is None and previous_stage >= 0 and previous_stage != value['stage']:
+                        self.animation = 'evolve'
+                        self.animation_until = time.monotonic()+2.4
+                        self.frame_number = 0
+                    self.name.set(value['name']+' · '+(value['form'] if self.form_override is None else
+                        ['基尔兽','古拉兽','大古拉兽','红莲骑士兽','红莲骑士兽 CM','红莲骑士兽 X'][self.form_override]+'（预览）'))
                     if not getattr(self, 'notice_until', 0) > time.monotonic():
                         self.bubble.set('陪伴记录 '+str(value['interactions'])+' 次 · 亲密度 '+str(value['bond'])+'\n双击我打开互动，右键查看控制菜单')
+                elif kind == 'animation':
+                    self.animation = value
+                    self.animation_until = time.monotonic() + (1.6 if value == 'bread' else 2.16)
+                    self.frame_number = 0
                 else:
                     self.bubble.set(value)
                     self.notice_until = time.monotonic()+8
@@ -174,6 +187,8 @@ class Companion:
                 if not self.connected:
                     raise RuntimeError('仍在连接服务器')
                 result = self.api(path, body)
+                if path == '/api/interact' and body.get('action') == 'feed':
+                    self.messages.put(('animation', 'bread' if self.stage == 0 and result.get('snack') == 'guilmon_bread' else 'feed'))
                 self.messages.put(('notice', result.get('reply','操作已记录')))
             except Exception as exc:
                 self.messages.put(('notice','操作未完成：'+str(exc)[:100]))
@@ -208,6 +223,18 @@ class Companion:
 
     def context_menu(self, event):
         menu = tk.Menu(self.root,tearoff=0)
+        preview = tk.Menu(menu, tearoff=0)
+        for index, form in enumerate(['基尔兽','古拉兽','大古拉兽','红莲骑士兽','红莲骑士兽 CM','红莲骑士兽 X 抗体']):
+            def show(i=index):
+                self.form_override=i
+                self.load_sprite(i)
+                self.animation='feed'
+                self.animation_until=time.monotonic()+2.16
+                self.frame_number=0
+                self.bubble.set('形象预览：不改变实际成长阶段')
+            preview.add_command(label=form, command=show)
+        preview.add_command(label='恢复真实成长形态',command=lambda:setattr(self,'form_override',None))
+        menu.add_cascade(label='像素动作图鉴（预览）',menu=preview)
         menu.add_command(label='打开观察台',command=lambda:webbrowser.open(BASE+'/#'+self.token))
         menu.add_command(label='暂停活动和实验',command=lambda:self.action('/api/control',{'action':'pause'}))
         menu.add_command(label='继续活动',command=lambda:self.action('/api/control',{'action':'resume'}))
