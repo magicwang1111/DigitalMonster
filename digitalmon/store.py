@@ -164,6 +164,14 @@ class Store:
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
             self._check_epoch(c, expected_epoch)
+            from .brain import ensure
+            state=self._state(c)
+            brain=ensure(state)
+            sources=brain.setdefault('explored_sources',[])
+            if result['url'] not in sources:
+                sources.append(result['url'])
+                del sources[:-100]
+            self._save(c,state)
             cur = c.execute('INSERT INTO memories(ts,text,source) VALUES(?,?,?)',
                             (time.time(), text, result['url']))
             summary = {k:v for k,v in result.items() if k not in ('text', 'links')}

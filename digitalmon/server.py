@@ -87,6 +87,11 @@ def make_server(runtime, token, port=8765):
                     result = interact(runtime.store, body.get('action'))
                 elif self.path == '/api/research':
                     result = {'job_id': runtime.queue('research', {'url': body.get('url')})}
+                elif self.path == '/api/explore':
+                    sources=runtime.store.snapshot().get('brain',{}).get('explored_sources',[])
+                    pages=['random','sqlite3','math','collections','datetime','json','statistics','pathlib','itertools','functools','heapq','bisect']
+                    url='https://docs.python.org/3/library/'+pages[len(sources)%len(pages)]+'.html'
+                    result={'job_id':runtime.queue('research',{'url':url}), 'reply':'已开始联网探索，完成后记入同一个体的来源记录。'}
                 elif self.path == '/api/train':
                     result = {'job_id': runtime.queue('train', body)}
                 elif self.path == '/api/rollback':

@@ -28,6 +28,9 @@ class Companion:
         self.root.configure(bg='#111827')
         self.root.attributes('-topmost', True)
         self.root.resizable(False, False)
+        self.root.overrideredirect(True)
+        if os.name == 'nt':
+            self.root.wm_attributes('-transparentcolor','#111827')
         self.token = ''
         self.tunnel = None
         self.messages = queue.Queue()
@@ -41,29 +44,54 @@ class Companion:
         self.popup = None
         self.name = tk.StringVar(value='基尔兽')
         self.bubble = tk.StringVar(value='正在连接她的记忆与世界……')
-        tk.Label(self.root, textvariable=self.name, bg='#111827', fg='#e5e7eb',
-                 font=('Microsoft YaHei UI', 14, 'bold')).pack(pady=(10,0))
+        self.heading=tk.Label(self.root, textvariable=self.name, bg='#111827', fg='#e5e7eb',
+                 font=('Microsoft YaHei UI', 11, 'bold'))
         self.canvas = tk.Canvas(self.root, width=310, height=260, bg='#111827', highlightthickness=0)
         self.canvas.pack()
         self.sprite = self.canvas.create_image(155, 135)
         self.canvas.bind('<Button-1>', lambda _: self.action('/api/interact', {'action': 'pet'}))
-        self.canvas.bind('<Double-Button-1>', lambda _: self.interaction_window())
+        self.canvas.bind('<Double-Button-1>', lambda _: self.action('/api/explore',{}))
         self.canvas.bind('<Button-3>', self.context_menu)
-        tk.Label(self.root, textvariable=self.bubble, bg='#111827', fg='#9ee5ce',
-                 wraplength=300, font=('Microsoft YaHei UI', 10), height=3).pack()
-        buttons = tk.Frame(self.root, bg='#111827')
-        buttons.pack(pady=5)
+        self.status_label=tk.Label(self.root, textvariable=self.bubble, bg='#111827', fg='#9ee5ce',
+                 wraplength=300, font=('Microsoft YaHei UI', 10), height=3)
+        buttons = self.toolbar = tk.Frame(self.root, bg='#202b3e')
         for text, command in [('摸摸', lambda:self.action('/api/interact', {'action':'pet'})),
                               ('喂食', lambda:self.action('/api/interact', {'action':'feed'})),
-                              ('互动', self.interaction_window), ('成长', self.growth_window)]:
+                              ('探索', lambda:self.action('/api/explore',{})), ('进化', self.growth_window)]:
             tk.Button(buttons, text=text, command=command, bg='#26354b', fg='white',
                       relief='flat', padx=10).pack(side='left', padx=3)
+        self.root.bind('<Enter>',lambda _:self.show_tools())
+        self.root.bind('<Leave>',lambda _:self.root.after(350,self.hide_tools))
+        self.canvas.bind('<ButtonPress-1>',self.begin_drag)
+        self.canvas.bind('<B1-Motion>',self.drag)
+        self.canvas.bind('<ButtonRelease-1>',self.end_drag)
         self.load_sprite(0)
         self.root.protocol('WM_DELETE_WINDOW', self.close)
-        self.root.bind('<Escape>', lambda _:self.root.iconify())
+        self.root.bind('<Escape>', lambda _:self.close())
         self.animate()
         self.pump()
         threading.Thread(target=self.connect_loop, daemon=True).start()
+
+    def show_tools(self):
+        self.toolbar.pack(pady=5)
+        self.status_label.pack()
+
+    def hide_tools(self):
+        widget=self.root.winfo_containing(self.root.winfo_pointerx(),self.root.winfo_pointery())
+        if widget is not None and widget.winfo_toplevel()==self.root:return
+        self.toolbar.pack_forget();self.status_label.pack_forget()
+
+    def begin_drag(self,event):
+        self.drag_origin=(event.x_root,event.y_root,self.root.winfo_x(),self.root.winfo_y())
+        self.dragged=False
+
+    def drag(self,event):
+        x,y,wx,wy=self.drag_origin
+        if abs(event.x_root-x)+abs(event.y_root-y)>5:self.dragged=True
+        if self.dragged:self.root.geometry(f'+{wx+event.x_root-x}+{wy+event.y_root-y}')
+
+    def end_drag(self,event):
+        if not self.dragged:self.action('/api/interact',{'action':'pet'})
 
     def api(self, path, body=None):
         req = urllib.request.Request(BASE+path,
@@ -219,7 +247,9 @@ class Companion:
         pet = getattr(self,'pet',None)
         if not pet:
             return messagebox.showinfo('成长记录','仍在连接服务器。',parent=self.root)
-        messagebox.showinfo('成长与进化', '\n\n'.join(pet['requirements'])+'\n\n'+pet['capability_note'],parent=self.root)
+        progress=pet.get('progress',{})
+        now=f"当前：喂食{progress.get('feeds',0)}，摸摸{progress.get('touches',0)}，学习更新{progress.get('learning_updates',0)}，活动{progress.get('active_steps',0)}步，探索来源{progress.get('unique_sources',0)}个"
+        messagebox.showinfo('进化条件与进度',now+'\n\n'+'\n\n'.join(pet['requirements'])+'\n\n这些是养成进化规则，不是通用智能能力认证。',parent=self.root)
 
     def context_menu(self, event):
         menu = tk.Menu(self.root,tearoff=0)

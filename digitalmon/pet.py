@@ -7,7 +7,13 @@ FORMS = ['基尔兽', '古拉兽', '大古拉兽', '红莲骑士兽']
 
 
 def stage_for(state, reports):
-    return 0  # Navigation benchmarks are unrelated to companion development.
+    p,b=state.get('pet',{}),state.get('brain',{})
+    sources=len(set(b.get('explored_sources',[])))
+    stage=0
+    for level,feeds,touches,updates,steps,reads in ((1,10,10,30,1200,3),(2,30,30,100,7200,6),(3,80,80,250,21600,10)):
+        if (p.get('feed_count',0)>=feeds and p.get('touch_count',0)>=touches and
+            b.get('updates',0)>=updates and b.get('steps',0)>=steps and sources>=reads):stage=level
+    return stage
 
 
 def status(store, data):
@@ -20,22 +26,26 @@ def status(store, data):
             reports.append(json.loads(path.read_text(encoding='utf-8')))
         except (ValueError, OSError):
             pass
-    candidate = stage_for(state, reports)
     with store.db() as c:
         c.execute('BEGIN IMMEDIATE')
         current = store._state(c)
         pet = current.setdefault('pet', {'bond': 0, 'interactions': 0, 'stage': 0, 'last_action': None})
+        candidate = stage_for(current, [])
         if candidate > pet['stage'] and not current['paused'] and not current['stopped']:
             pet['stage'] = candidate
             store._event(c, 'digivolution', {'stage': candidate, 'form': FORMS[candidate],
-                                             'reason': 'measured benchmark and sustained activity milestones'})
+                                             'reason': 'care/exploration game milestones; same brain identity retained'})
         store._save(c, current)
         return {**pet, 'form': FORMS[pet['stage']], 'name': '基尔兽', 'brain': current.get('brain', {}),
                 'simulated': True, 'forms': FORMS,
+                'progress': {'feeds':pet.get('feed_count',0),'touches':pet.get('touch_count',0),
+                    'learning_updates':current.get('brain',{}).get('updates',0),
+                    'active_steps':current.get('brain',{}).get('steps',0),
+                    'unique_sources':len(set(current.get('brain',{}).get('explored_sources',[])))},
                 'requirements': ['基尔兽：初始形态',
-                    '古拉兽：宠物学习评测尚未定义，暂不自动解锁',
-                    '大古拉兽：需验证实际互动能力，暂不自动解锁',
-                    '红莲骑士兽：需实现并通过其他领域的能力评测，目前尚未开放',
+                    '古拉兽：喂食10次、摸摸10次、学习30次、活动1200步、探索3个来源',
+                    '大古拉兽：喂食30次、摸摸30次、学习100次、活动7200步、探索6个来源',
+                    '红莲骑士兽：喂食80次、摸摸80次、学习250次、活动21600步、探索10个来源',
                     'CM / X 抗体：后续形态，目前尚未开放'],
                 'capability_note': '亲密度与外观是模拟状态；不代表意识。当前语言回复为规则回执。'}
 
@@ -53,6 +63,7 @@ def interact(store, action):
         pet = s.setdefault('pet', {'bond': 0, 'interactions': 0, 'stage': 0, 'last_action': None})
         pet['bond'] = min(100, pet['bond'] + 1)
         pet['interactions'] += 1
+        if action == 'pet':pet['touch_count']=pet.get('touch_count',0)+1
         pet['last_action'] = {'kind': action, 'time': time.time()}
         if action == 'feed':
             pet['feed_count'] = pet.get('feed_count', 0) + 1
