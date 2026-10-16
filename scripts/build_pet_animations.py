@@ -19,10 +19,11 @@ for stage,name in enumerate(['guilmon','growlmon','wargrowlmon','gallantmon']):
    if action=='evolve':
     for k in range(8):
      a=k*math.tau/8+i*.13; px=128+int(105*math.cos(a));py=128+int(105*math.sin(a));draw.rectangle((px,py,px+4,py+4),fill=(255,224,115,255))
-   frames.append(frame)
+   pal=frame.convert('RGB').quantize(colors=255); alpha=frame.getchannel('A'); pal=pal.point(lambda v:v+1); palette=pal.getpalette(); pal.putpalette(([0,0,0]+palette[:765])); pal.paste(0,mask=alpha.point(lambda a:255 if a<128 else 0)); frames.append(pal)
   path=root/f'{name}-{action}.gif'
-  frames[0].save(path,save_all=True,append_images=frames[1:],duration=100,loop=0,disposal=2,transparency=0)
+  frames[0].save(path,save_all=True,append_images=frames[1:],duration=100,loop=0,disposal=2,transparency=0,optimize=False)
   manifest[f'{name}-{action}']={'frames':12,'fps':10,'size':[256,256],'method':'procedural sprite motion and interaction effects'}
 (root/'animations.json').write_text(json.dumps(manifest,indent=2))
 Image.open(root/'guilmon-idle.gif').save(root/'pet.ico',sizes=[(32,32),(48,48),(256,256)])
 print('Exported',len(manifest),'GIF animations')
+

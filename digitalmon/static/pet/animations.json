@@ -1,0 +1,146 @@
+{
+  "guilmon-idle": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "guilmon-pet": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "guilmon-feed": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "guilmon-evolve": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "growlmon-idle": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "growlmon-pet": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "growlmon-feed": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "growlmon-evolve": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "wargrowlmon-idle": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "wargrowlmon-pet": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "wargrowlmon-feed": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "wargrowlmon-evolve": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "gallantmon-idle": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "gallantmon-pet": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "gallantmon-feed": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  },
+  "gallantmon-evolve": {
+    "frames": 12,
+    "fps": 10,
+    "size": [
+      256,
+      256
+    ],
+    "method": "procedural sprite motion and interaction effects"
+  }
+}
