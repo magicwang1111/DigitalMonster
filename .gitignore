@@ -6,4 +6,5 @@ data/
 artifacts/
 .superpowers/
 *.log
+*-deploy.tar
 

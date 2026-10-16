@@ -1,5 +1,6 @@
 {
   "paid_services": false,
+  "max_data_bytes": 2147483648,
   "max_network_jobs_per_day": 24,
   "max_training_jobs_per_day": 12,
   "autonomous_interval_seconds": 3600,

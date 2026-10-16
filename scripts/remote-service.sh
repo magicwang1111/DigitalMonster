@@ -7,6 +7,7 @@ case "${1:-status}" in
     tmux new-session -d -s digitalmonster "cd $ROOT/app && exec setpriv --reuid=digitalmonster --regid=digitalmonster --init-groups --no-new-privs $ROOT/runtime/bin/python -m digitalmon --data $ROOT/data --gpu >> $ROOT/data/service.log 2>&1"
     ;;
   stop)
+    find "$ROOT/data/research" -mindepth 1 -maxdepth 1 -type d -exec touch '{}/STOP' \;
     # Only this project's process, identified by its exact module and data directory.
     pgrep -u digitalmonster -f "python -m digitalmon --data $ROOT/data" | xargs -r kill -TERM
     ;;

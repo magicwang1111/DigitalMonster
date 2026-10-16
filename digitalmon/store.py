@@ -24,7 +24,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS policies (id INTEGER PRIMARY KEY, ts REAL, policy TEXT, metrics TEXT);
             ''')
             state = {'id': str(uuid.uuid4()), 'name': '初生', 'born': time.time(), 'ticks': 0,
-                     'paused': False, 'stopped': False, 'episode': 0, 'world': initial(0),
+                     'paused': False, 'stopped': False, 'control_epoch': 0, 'episode': 0, 'world': initial(0),
                      'policy_version': 0, 'total_reward': 0.0, 'resources_collected': 0}
             c.execute('INSERT OR IGNORE INTO life VALUES(1,?)', (json.dumps(state),))
 
@@ -101,15 +101,25 @@ class Store:
             s = self._state(c)
             s['paused'] = action != 'resume'
             s['stopped'] = action == 'stop'
+            s['control_epoch'] = s.get('control_epoch', 0) + 1
             self._save(c, s)
             if action == 'stop':
                 c.execute("UPDATE jobs SET status='cancelled', updated=? WHERE status='queued'", (time.time(),))
             self._event(c, 'control', {'action': action})
 
-    def remember(self, text, source='user'):
+    @staticmethod
+    def _check_epoch(c, expected_epoch):
+        if expected_epoch is not None:
+            s = Store._state(c)
+            if s['paused'] or s['stopped'] or s.get('control_epoch', 0) != expected_epoch:
+                raise InterruptedError('operation belongs to a cancelled control epoch')
+
+    def remember(self, text, source='user', expected_epoch=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 12000:
             raise ValueError('memory must contain 1..12000 characters')
         with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            self._check_epoch(c, expected_epoch)
             cur = c.execute('INSERT INTO memories(ts,text,source) VALUES(?,?,?)', (time.time(), text, source))
             c.execute('DELETE FROM memories WHERE id <= (SELECT MAX(id)-5000 FROM memories)')
             return cur.lastrowid
@@ -140,13 +150,30 @@ class Store:
             if not r:
                 return None
             c.execute("UPDATE jobs SET status='running',updated=? WHERE id=?", (time.time(), r['id']))
-            return {**dict(r), 'payload': json.loads(r['payload'])}
+            return {**dict(r), 'payload': json.loads(r['payload']), 'control_epoch': s.get('control_epoch', 0)}
 
     def finish(self, job_id, result, status='completed'):
         with self.db() as c:
             c.execute('UPDATE jobs SET status=?,updated=?,result=? WHERE id=?',
                       (status, time.time(), json.dumps(result, ensure_ascii=False), job_id))
             self._event(c, 'job', {'id': job_id, 'status': status, 'result': result})
+            c.execute("DELETE FROM jobs WHERE status NOT IN ('queued','running') AND id < (SELECT MAX(id)-500 FROM jobs)")
+
+    def complete_research(self, job_id, result, expected_epoch):
+        text = (result['title'] + '\n' + result['text'])[:12000]
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            self._check_epoch(c, expected_epoch)
+            cur = c.execute('INSERT INTO memories(ts,text,source) VALUES(?,?,?)',
+                            (time.time(), text, result['url']))
+            summary = {k:v for k,v in result.items() if k not in ('text', 'links')}
+            summary['memory_id'] = cur.lastrowid
+            c.execute("UPDATE jobs SET status='completed',updated=?,result=? WHERE id=? AND status='running'",
+                      (time.time(), json.dumps(summary, ensure_ascii=False), job_id))
+            self._event(c, 'job', {'id': job_id, 'status': 'completed', 'result': summary})
+            c.execute('DELETE FROM memories WHERE id <= (SELECT MAX(id)-5000 FROM memories)')
+            c.execute("DELETE FROM jobs WHERE status NOT IN ('queued','running') AND id < (SELECT MAX(id)-500 FROM jobs)")
+        return summary
 
     def recover(self):
         with self.db() as c:
@@ -158,11 +185,12 @@ class Store:
             r = c.execute('SELECT policy FROM policies WHERE id=?', (v,)).fetchone()
             return json.loads(r[0]) if r else {}
 
-    def promote(self, policy, metrics):
+    def promote(self, policy, metrics, expected_epoch=None):
         from .learning import validate
         validate(policy)
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            self._check_epoch(c, expected_epoch)
             s = self._state(c)
             if s['paused'] or s['stopped']:
                 return None
@@ -171,6 +199,7 @@ class Store:
             s['policy_version'] = cur.lastrowid
             self._save(c, s)
             self._event(c, 'evolution', {'version': cur.lastrowid, 'metrics': metrics})
+            c.execute('DELETE FROM policies WHERE id < (SELECT MAX(id)-31 FROM policies)')
             return cur.lastrowid
 
     def rollback(self, version):

@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -15,10 +17,41 @@ class Runtime:
         self.config = config or {'max_network_jobs_per_day': 24, 'max_training_jobs_per_day': 12,
                                  'autonomous_interval_seconds': 3600}
         self.shutdown = threading.Event()
+        self.active_epoch = None
+
+    def control(self, action):
+        self.store.control(action)
+        if action in ('pause', 'stop'):
+            for progress in (self.data/'research').glob('*/progress.json'):
+                try:
+                    status = json.loads(progress.read_text(encoding='utf-8')).get('status')
+                    if status in ('training', 'generating-data'):
+                        (progress.parent/'STOP').touch()
+                except (OSError, ValueError):
+                    continue
+
+    def resource(self):
+        resources = self.config.get('resources')
+        if resources is None:
+            return {'enabled': True, 'gpu_indices': [0]}
+        resource_id = 'local-4090d' if os.name == 'nt' else 'remote-5090'
+        return next((r for r in resources if r['id'] == resource_id), {'enabled': False})
+
+    def check_capacity(self):
+        resource = self.resource()
+        if not resource.get('enabled'):
+            raise ValueError('host resource is disabled')
+        if resource.get('root') and not self.data.resolve().is_relative_to(Path(resource['root']).resolve()):
+            raise ValueError('data directory is outside the authorized resource root')
+        self.data.mkdir(parents=True, exist_ok=True)
+        used = sum(p.stat().st_size for p in self.data.rglob('*') if p.is_file())
+        if used >= self.config.get('max_data_bytes', 2*1024**3) or shutil.disk_usage(self.data).free < 256*1024**2:
+            raise ValueError('storage budget exhausted')
 
     def cancelled(self):
         s = self.store.snapshot()
-        return self.shutdown.is_set() or s['paused'] or s['stopped']
+        return (self.shutdown.is_set() or s['paused'] or s['stopped'] or
+                self.active_epoch is not None and s.get('control_epoch', 0) != self.active_epoch)
 
     def within_budget(self, kind):
         key = 'max_network_jobs_per_day' if kind == 'research' else 'max_training_jobs_per_day'
@@ -28,6 +61,7 @@ class Runtime:
         return count < self.config[key]
 
     def queue(self, kind, payload):
+        self.check_capacity()
         if not self.within_budget(kind):
             raise ValueError('daily capability budget exhausted')
         if kind == 'research':
@@ -37,7 +71,11 @@ class Runtime:
             backend = payload.get('backend', 'gpu' if self.gpu else 'cpu')
             if backend not in ('cpu', 'gpu') or backend == 'gpu' and not self.gpu:
                 raise ValueError('requested backend unavailable')
-            payload = {'backend': backend, 'episodes': 4000, 'seed': int(payload.get('seed', 7))}
+            indices = self.resource().get('gpu_indices', [])
+            if backend == 'gpu' and not indices:
+                raise ValueError('no GPU authorized')
+            payload = {'backend': backend, 'episodes': 4000, 'seed': int(payload.get('seed', 7)),
+                       'device': f'cuda:{indices[0]}' if indices else None}
         return self.store.enqueue(kind, payload)
 
     def schedule(self):
@@ -61,20 +99,22 @@ class Runtime:
         validate(policy)
         result = compare(evaluate(policy), evaluate(self.store.active_policy()))
         result['training'] = training
-        result['version'] = self.store.promote(policy, result) if result['accepted'] else None
+        result['version'] = self.store.promote(policy, result, expected_epoch=self.active_epoch) if result['accepted'] else None
         return result
 
     def work_once(self):
         job = self.store.claim()
         if not job:
             return False
+        self.active_epoch = job['control_epoch']
         try:
+            self.check_capacity()
             if job['kind'] == 'research':
                 result = fetch_public(job['payload']['url'])
                 if self.cancelled():
                     raise InterruptedError('paused before storing network result')
-                result['memory_id'] = self.store.remember(result['title'] + '\n' + result['text'], result['url'])
-                result = {k: v for k, v in result.items() if k not in ('text', 'links')}
+                self.store.complete_research(job['id'], result, self.active_epoch)
+                return True
             else:
                 if job['payload'].get('backend') == 'gpu':
                     folder = self.data / 'experiments' / f'job-{job["id"]}'
@@ -82,7 +122,8 @@ class Runtime:
                     log = folder / 'train.log'
                     with log.open('w', encoding='utf-8') as out:
                         child = subprocess.Popen([sys.executable, '-m', 'digitalmon.gpu_train', '--output',
-                            str(folder), '--seed', str(job['payload'].get('seed', 7))], stdout=out, stderr=out)
+                            str(folder), '--seed', str(job['payload'].get('seed', 7)), '--device',
+                            job['payload'].get('device', 'cuda:0')], stdout=out, stderr=out)
                         start = time.monotonic()
                         while child.poll() is None:
                             if self.cancelled() or time.monotonic()-start > 180:
@@ -109,6 +150,8 @@ class Runtime:
             self.store.finish(job['id'], {'error': str(exc)}, 'cancelled')
         except Exception as exc:
             self.store.finish(job['id'], {'error': str(exc)[:500]}, 'failed')
+        finally:
+            self.active_epoch = None
         return True
 
     def activity_loop(self):

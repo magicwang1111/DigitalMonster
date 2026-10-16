@@ -103,6 +103,7 @@ def run(args):
     torch.backends.cudnn.benchmark = True
     torch.set_float32_matmul_precision('high')
     device = args.device
+    torch.cuda.set_per_process_memory_fraction(args.memory_fraction, device=device)
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     start = time.monotonic()
@@ -111,20 +112,54 @@ def run(args):
                    'torch': torch.__version__, 'gpu': torch.cuda.get_device_name(device),
                    'training_seeds': [args.seed*100000, args.seed*100000+args.maps-1],
                    'validation_seeds': [20000000, 20000127], 'test_seeds': [30000000,30000511],
-                   'claim': 'navigation learning on procedural 9x9 maps; not general intelligence'})
+                   'claim': f'navigation learning on procedural {args.size}x{args.size} maps; not general intelligence'})
     save_json(out/'config.json', config)
     save_json(out/'progress.json', {'status': 'generating-data', 'step': 0})
-    mazes = [generate(args.seed*100000+i) for i in range(args.maps)]
+    mazes = [generate(args.seed*100000+i, size=args.size) for i in range(args.maps)]
     x, masks = tensors(torch, mazes, device)
     del mazes
-    validation = [generate(20000000+i) for i in range(128)]
-    model = make_model(torch).to(device)
+    validation = [generate(20000000+i, size=args.size) for i in range(128)]
+    model = make_model(torch, width=args.width, rounds=args.rounds).to(device)
+    profiles = []
+    if args.autobatch:
+        selected = None
+        for batch_size in (128, 256, 512, 768, 1024, 1536, 2048, 3072):
+            try:
+                model.zero_grad(set_to_none=True)
+                torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats(device)
+                def probe():
+                    idx = torch.randint(0, len(x), (batch_size,), device=device)
+                    logits = model(x[idx])
+                    logits.square().mean().backward()
+                    torch.cuda.synchronize(device)
+                probe()
+                peak = torch.cuda.max_memory_allocated(device)
+                profiles.append({'batch': batch_size, 'peak_mib': peak/1024**2, 'status': 'ok'})
+                # Keep activation headroom for the actual loss, evaluation and CUDA workspaces.
+                if peak > torch.cuda.get_device_properties(device).total_memory * args.memory_fraction * 0.93:
+                    break
+                selected = batch_size
+            except torch.cuda.OutOfMemoryError:
+                profiles.append({'batch': batch_size, 'status': 'out-of-memory'})
+                break
+            finally:
+                model.zero_grad(set_to_none=True)
+                torch.cuda.empty_cache()
+        if selected is None:
+            raise RuntimeError('insufficient GPU memory for the minimum batch')
+        args.batch = selected
+        config['batch'] = selected
+        config['batch_profiles'] = profiles
+        save_json(out/'config.json', config)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=0.0001)
     initial_weights = next(model.parameters()).detach().clone()
     best = -1
     progress = {}
     history = []
     loss_initial = None
+    updates = 0
+    best_step = 0
     # 60 seconds reserved for final evaluation and artifacts.
     for step in range(1, args.steps+1):
         if (out/'STOP').exists() or time.monotonic()-start > args.seconds-60:
@@ -144,6 +179,7 @@ def run(args):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
+        updates = step
         if step == 1 or step % 100 == 0:
             progress = {'status': 'training', 'step': step, 'loss': loss.item(),
                         'elapsed_seconds': time.monotonic()-start, 'seed': args.seed,
@@ -158,6 +194,7 @@ def run(args):
                     torch.save(model.state_dict(), out/'best.pt.tmp')
                     os.replace(out/'best.pt.tmp', out/'best.pt')
                     progress['best_step'] = step
+                    best_step = step
             elif history:
                 progress['success_rate'] = history[-1].get('success_rate', best)
             history.append(progress.copy())
@@ -166,17 +203,24 @@ def run(args):
             print(json.dumps(progress), flush=True)
     if not (out/'best.pt').exists():
         raise RuntimeError('no checkpoint produced before training stopped')
+    if (out/'STOP').exists():
+        save_json(out/'progress.json', {'status': 'cancelled', 'step': updates,
+            'elapsed_seconds': time.monotonic()-start, 'best_validation_success': best,
+            'note': 'checkpoint retained; final test intentionally not run after cancellation'})
+        return
     changed = bool(torch.any(initial_weights != next(model.parameters())).item())
     model.load_state_dict(torch.load(out/'best.pt', map_location=device, weights_only=True))
-    test_mazes = [generate(30000000+i) for i in range(512)]
+    test_mazes = [generate(30000000+i, size=args.size) for i in range(512)]
     result = evaluate_model(torch, model, test_mazes, device)
-    report = {**config, 'status': 'completed', 'step': step-1 if step <= args.steps and (out/'STOP').exists() else step,
+    report = {**config, 'status': 'cancelled' if (out/'STOP').exists() else 'completed', 'step': updates,
+              'best_step': best_step, 'training_limit_reached': updates < args.steps,
               'elapsed_seconds': time.monotonic()-start, 'loss_initial': loss_initial,
               'parameters_changed': changed, 'best_validation_success': best,
               'test': result, 'success_rate': result['success_rate'],
               'random_baseline': baseline(test_mazes, 'random'),
               'greedy_baseline': baseline(test_mazes, 'greedy'),
               'checkpoint_sha256': hashlib.sha256((out/'best.pt').read_bytes()).hexdigest()}
+    report['gpu_peak_memory_mib'] = torch.cuda.max_memory_allocated(device)/1024**2
     # Export the trained network's fixed-world behavior for adoption by the live organism.
     from .world import CELLS, WALLS
     exported = {}
@@ -205,8 +249,15 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=12000)
     parser.add_argument('--batch', type=int, default=256)
     parser.add_argument('--seconds', type=int, default=1800)
+    parser.add_argument('--size', type=int, default=9)
+    parser.add_argument('--width', type=int, default=48)
+    parser.add_argument('--rounds', type=int, default=12)
+    parser.add_argument('--memory-fraction', type=float, default=0.9)
+    parser.add_argument('--autobatch', action='store_true')
     args = parser.parse_args()
     if not (1 <= args.maps <= 32768 and 1 <= args.steps <= 100000 and
-            1 <= args.batch <= 1024 and 90 <= args.seconds <= 7200 and 1 <= args.seed <= 100):
+            1 <= args.batch <= 3072 and 90 <= args.seconds <= 7200 and 1 <= args.seed <= 100 and
+            0.1 <= args.memory_fraction <= 0.95 and
+            5 <= args.size <= 21 and 16 <= args.width <= 128 and 4 <= args.rounds <= 32):
         parser.error('experiment exceeds allowed limits')
     run(args)

@@ -37,6 +37,8 @@ def make_server(runtime, token, port=8765):
                 return self.send(200, (Path(__file__).parent/'static'/'index.html').read_bytes(), 'text/html; charset=utf-8')
             if path == '/health':
                 return self.send(200, {'status': 'ok'})
+            if path == '/pet/evolution-pixel.png':
+                return self.send(200, (Path(__file__).parent/'static'/'pet'/'evolution-pixel.png').read_bytes(), 'image/png')
             if not self.authorized():
                 return self.send(403, {'error': 'authorization required'})
             if path == '/api/state':
@@ -48,6 +50,9 @@ def make_server(runtime, token, port=8765):
             if path == '/api/memories':
                 query = parse_qs(urlsplit(self.path).query).get('q', [''])[0][:500]
                 return self.send(200, runtime.store.memories(query))
+            if path == '/api/pet':
+                from .pet import status
+                return self.send(200, status(runtime.store, runtime.data))
             if path == '/api/experiments':
                 reports = []
                 for p in sorted((runtime.data / 'research').glob('*/progress.json'))[-12:]:
@@ -72,11 +77,14 @@ def make_server(runtime, token, port=8765):
                 if not isinstance(body, dict):
                     raise ValueError('JSON object required')
                 if self.path == '/api/control':
-                    runtime.store.control(body.get('action'))
+                    runtime.control(body.get('action'))
                     result = {'ok': True}
                 elif self.path == '/api/message':
                     mid = runtime.store.remember(body.get('text'))
                     result = {'memory_id': mid, 'reply': '已保存这条记忆。当前未接入语言生成模型；这是一条系统回执。'}
+                elif self.path == '/api/interact':
+                    from .pet import interact
+                    result = interact(runtime.store, body.get('action'))
                 elif self.path == '/api/research':
                     result = {'job_id': runtime.queue('research', {'url': body.get('url')})}
                 elif self.path == '/api/train':
