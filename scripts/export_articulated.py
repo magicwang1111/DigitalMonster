@@ -29,7 +29,8 @@ def clean_edge_fragments(alpha):
 
 def export(source):
     sheet = Image.open(source).convert('RGBA')
-    cols, rows = (4, 3) if source.stem.endswith('-feed') else (2, 2)
+    cols, rows = ((4,3) if source.stem.endswith('-feed') else
+                  (4,2) if source.stem.endswith('-walk') or '-to-' in source.stem else (2,2))
     cells = []
     for y in range(rows):
         for x in range(cols):

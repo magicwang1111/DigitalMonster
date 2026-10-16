@@ -172,5 +172,47 @@
     "duration_ms": 400,
     "method": "generated articulated mouth, arms, tail/cape poses",
     "source": "sources\\gallantmon-x-pet.png"
+  },
+  "gallantmon-walk": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\gallantmon-walk.png"
+  },
+  "growlmon-to-wargrowlmon": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\growlmon-to-wargrowlmon.png"
+  },
+  "growlmon-walk": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\growlmon-walk.png"
+  },
+  "guilmon-to-growlmon": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\guilmon-to-growlmon.png"
+  },
+  "guilmon-walk": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\guilmon-walk.png"
+  },
+  "wargrowlmon-to-gallantmon": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\wargrowlmon-to-gallantmon.png"
+  },
+  "wargrowlmon-walk": {
+    "frames": 8,
+    "duration_ms": 400,
+    "method": "generated articulated mouth, arms, tail/cape poses",
+    "source": "sources\\wargrowlmon-walk.png"
   }
 }

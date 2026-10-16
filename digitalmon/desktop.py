@@ -1,6 +1,7 @@
 """Windows desktop companion. Uses the same remote identity; stores no second organism."""
 import json
 import math
+import random
 import os
 from pathlib import Path
 import queue
@@ -39,6 +40,17 @@ class Companion:
         self.form_override = None
         self.animation = 'idle'
         self.animation_until = 0
+        self.last_interaction=time.monotonic()
+        self.next_wander=time.monotonic()+15
+        self.pinned=False
+        self.saved_position=None
+        self.move_target=None
+        try:
+            settings=json.loads((ROOT/'data/desktop-settings.json').read_text(encoding='utf-8'))
+            self.pinned=bool(settings.get('pinned',False))
+            self.saved_position=settings.get('position')
+        except (OSError,ValueError):pass
+        self.wander_direction=-1
         self.frame_number = 0
         self.connected = False
         self.popup = None
@@ -71,10 +83,25 @@ class Companion:
         self.animate()
         self.pump()
         threading.Thread(target=self.connect_loop, daemon=True).start()
+        if self.saved_position and len(self.saved_position)==2:
+            self.root.after(150,lambda:self.place_window(*self.saved_position))
+
+    def place_window(self,x,y):
+        if os.name=='nt':
+            import ctypes
+            from ctypes import wintypes
+            api=ctypes.windll.user32
+            api.GetParent.argtypes=[wintypes.HWND];api.GetParent.restype=wintypes.HWND
+            api.SetWindowPos.argtypes=[wintypes.HWND,wintypes.HWND,ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_int,wintypes.UINT]
+            hwnd=api.GetParent(self.root.winfo_id()) or self.root.winfo_id()
+            api.SetWindowPos(hwnd,0,int(x),int(y),0,0,0x0015)
+        else:
+            self.root.geometry(f'{self.root.winfo_width()}x{self.root.winfo_height()}{int(x):+d}{int(y):+d}')
 
     def show_tools(self):
+        self.last_interaction=time.monotonic()
+        if self.animation=='walk':self.animation='idle';self.animation_until=0
         self.toolbar.pack(pady=5)
-        self.status_label.pack()
 
     def hide_tools(self):
         widget=self.root.winfo_containing(self.root.winfo_pointerx(),self.root.winfo_pointery())
@@ -88,10 +115,18 @@ class Companion:
     def drag(self,event):
         x,y,wx,wy=self.drag_origin
         if abs(event.x_root-x)+abs(event.y_root-y)>5:self.dragged=True
-        if self.dragged:self.root.geometry(f'+{wx+event.x_root-x}+{wy+event.y_root-y}')
+        if self.dragged:self.place_window(wx+event.x_root-x,wy+event.y_root-y)
 
     def end_drag(self,event):
         if not self.dragged:self.action('/api/interact',{'action':'pet'})
+        self.move_target=None
+
+    def toggle_pin(self):
+        self.pinned=not self.pinned
+        self.move_target=None;self.animation='idle';self.animation_until=0
+        (ROOT/'data').mkdir(exist_ok=True)
+        (ROOT/'data/desktop-settings.json').write_text(json.dumps({'pinned':self.pinned,
+            'position':[self.root.winfo_x(),self.root.winfo_y()]}),encoding='utf-8')
 
     def api(self, path, body=None):
         req = urllib.request.Request(BASE+path,
@@ -155,12 +190,16 @@ class Companion:
         self.canvas.itemconfig(self.sprite, image=self.photo)
         self.stage = stage
         self.frames = {}
-        for action in ('idle', 'pet', 'feed', 'evolve', 'bread'):
+        for action in ('idle', 'pet', 'feed', 'evolve', 'bread', 'walk'):
             path = ROOT/'digitalmon'/'static'/'pet'/f'{["guilmon","growlmon","wargrowlmon","gallantmon","gallantmon-cm","gallantmon-x"][stage]}-{action}.gif'
             if path.exists():
                 from PIL import ImageSequence
                 with Image.open(path) as gif:
                     self.frames[action] = [ImageTk.PhotoImage(f.convert('RGBA')) for f in ImageSequence.Iterator(gif)]
+                    if action=='walk':
+                        from PIL import ImageOps
+                        gif.seek(0)
+                        self.frames['walk_right']=[ImageTk.PhotoImage(ImageOps.mirror(f.convert('RGBA'))) for f in ImageSequence.Iterator(gif)]
         if stage >= 4 and not self.frames.get('idle') and self.frames.get('feed'):
             self.frames['idle'] = [self.frames['feed'][-1]]
 
@@ -169,11 +208,34 @@ class Companion:
             return
         if time.monotonic() > self.animation_until:
             self.animation = 'idle'
-        frames = self.frames.get(self.animation, [])
+        now=time.monotonic()
+        state=getattr(self,'pet',{})
+        if (self.animation=='idle' and now>=self.next_wander and now-self.last_interaction>5
+            and not self.pinned and not state.get('paused') and not state.get('stopped')
+            and self.form_override is None
+            and self.frames.get('walk')):
+            from .motion import work_areas
+            areas=[a for a in work_areas(self.root) if a[2]-a[0]>=330 and a[3]-a[1]>=410]
+            if areas:
+                left,top,right,bottom=random.choice(areas)
+                self.move_target=(random.randint(left,right-330),random.randint(top,bottom-410))
+                self.animation='walk';self.animation_until=now+20;self.next_wander=now+24
+        if self.animation=='walk':
+            if self.pinned or not self.move_target or state.get('paused') or state.get('stopped'):
+                self.animation='idle'
+            else:
+                from .motion import advance
+                position=(self.root.winfo_x(),self.root.winfo_y())
+                x,y=advance(position,self.move_target)
+                self.wander_direction=1 if x>position[0] else -1
+                self.place_window(round(x),round(y))
+                if abs(x-self.move_target[0])+abs(y-self.move_target[1])<2:
+                    self.animation='idle';self.move_target=None;self.next_wander=now+random.uniform(2,8)
+        frames = self.frames.get('walk_right' if self.animation=='walk' and self.wander_direction>0 else self.animation, [])
         if frames:
             self.canvas.itemconfig(self.sprite, image=frames[self.frame_number % len(frames)])
             self.frame_number += 1
-        self.root.after(400 if self.animation == 'bread' else 180 if self.animation == 'feed' else 100, self.animate)
+        self.root.after(300 if self.animation=='transition' else 400 if self.animation == 'bread' else 180 if self.animation == 'feed' else 100, self.animate)
 
     def pump(self):
         try:
@@ -183,8 +245,14 @@ class Companion:
                     self.pet = value
                     previous_stage = self.stage
                     self.load_sprite(self.form_override if self.form_override is not None else value['stage'])
-                    if self.form_override is None and previous_stage >= 0 and previous_stage != value['stage']:
-                        self.animation = 'evolve'
+                    if self.form_override is None and 0 <= previous_stage < value['stage'] < 4:
+                        names=['guilmon','growlmon','wargrowlmon','gallantmon']
+                        transition=ROOT/'digitalmon/static/pet'/f'{names[previous_stage]}-to-{names[value["stage"]]}.gif'
+                        if transition.exists():
+                            from PIL import ImageSequence
+                            with Image.open(transition) as gif:
+                                self.frames['transition']=[ImageTk.PhotoImage(f.convert('RGBA')) for f in ImageSequence.Iterator(gif)]
+                        self.animation = 'transition' if transition.exists() else 'evolve'
                         self.animation_until = time.monotonic()+2.4
                         self.frame_number = 0
                     self.name.set((value['form'] if self.form_override is None else
@@ -207,6 +275,7 @@ class Companion:
             self.root.after(150, self.pump)
 
     def action(self, path, body):
+        self.last_interaction=time.monotonic()
         if path == '/api/interact':
             self.animation = 'feed' if body.get('action') == 'feed' else 'pet'
             self.animation_until = time.monotonic()+2.4
@@ -253,6 +322,7 @@ class Companion:
 
     def context_menu(self, event):
         menu = tk.Menu(self.root,tearoff=0)
+        menu.add_command(label='解除固定，自由活动' if self.pinned else '固定在当前位置',command=self.toggle_pin)
         preview = tk.Menu(menu, tearoff=0)
         for index, form in enumerate(['基尔兽','古拉兽','大古拉兽','红莲骑士兽','红莲骑士兽 CM','红莲骑士兽 X 抗体']):
             def show(i=index):

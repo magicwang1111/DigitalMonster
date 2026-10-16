@@ -30,6 +30,27 @@ def tick(store):
         rng=random.Random(str(b['steps'])+s['id'])
         a=rng.choices(range(4),weights=p)[0]
         b.update(action=ACTIONS[a],inputs=x,probabilities=p,steps=b['steps']+1)
+        observation={**{f'drive_{i}':v*100 for i,v in enumerate(b['needs'])},
+                     **{f'motor_{i}':100.0 if i==a else 0.0 for i in range(4)}}
+        window=b.setdefault('plasticity_window',[])
+        window.append(observation)
+        del window[:-64]
+        if b['steps']%64==0:
+            from .vendor.dosidicus.plasticity import PlasticityEngine,PlasticityConfig
+            engine=PlasticityEngine(PlasticityConfig(stdp_enabled=False,min_variance=1e-8))
+            for sample in window:engine.observe(sample)
+            weights={(f'drive_{i}',f'motor_{j}'):b['weights'][i+1][j] for i in range(4) for j in range(4)}
+            changes=engine.commit(weights,list(observation),externally_driven=[f'drive_{i}' for i in range(4)])
+            applied=[]
+            for (source,target),change in changes['weight_updates'].items():
+                if source.startswith('drive_') and target.startswith('motor_'):
+                    i,j=int(source[6:]),int(target[6:])
+                    b['weights'][i+1][j]=change['new_weight']
+                    applied.append({'source':source,'target':target,**change})
+            b['plasticity_commits']=b.get('plasticity_commits',0)+1
+            if applied:
+                b['updates']+=1
+                store._event(c,'synaptic_plasticity',{'brain_id':b['id'],'engine':'Dosidicus PlasticityEngine', 'changes':applied})
         if a==3:b['needs'][3]=max(0,b['needs'][3]-.001)
         s['ticks']+=1
         s['name']='基尔兽'

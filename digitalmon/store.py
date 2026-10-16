@@ -167,6 +167,9 @@ class Store:
             from .brain import ensure
             state=self._state(c)
             brain=ensure(state)
+            from .curriculum import clean_up_tasks
+            completed,failed=clean_up_tasks(brain.get('completed_tasks',[])+[result['url']],brain.get('failed_tasks',[]))
+            brain['completed_tasks'],brain['failed_tasks']=completed[-100:],failed[-100:]
             sources=brain.setdefault('explored_sources',[])
             if result['url'] not in sources:
                 sources.append(result['url'])

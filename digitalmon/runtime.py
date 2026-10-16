@@ -88,12 +88,10 @@ class Runtime:
         if not pending and time.time()-latest >= self.config['autonomous_interval_seconds']:
             if self.config.get('autonomous_navigation_training', False) and self.within_budget('train'):
                 self.queue('train', {'seed': 7 + self.store.snapshot()['episode']})
-            urls = ['https://docs.python.org/3/library/random.html',
-                    'https://docs.python.org/3/library/sqlite3.html',
-                    'https://www.gutenberg.org/ebooks/11']
-            if self.within_budget('research'):
-                self.queue('research', {'url': urls[research_count % len(urls)],
-                                       'reason': 'scheduled source-reading curriculum; rule selected'})
+            from .curriculum import next_task
+            url=next_task(self.store.snapshot().get('brain',{}))
+            if url and self.within_budget('research'):
+                self.queue('research', {'url':url, 'reason':'incomplete curriculum task'})
 
     def accept_policy(self, policy, training):
         validate(policy)
@@ -149,6 +147,15 @@ class Runtime:
         except InterruptedError as exc:
             self.store.finish(job['id'], {'error': str(exc)}, 'cancelled')
         except Exception as exc:
+            if job['kind']=='research':
+                with self.store.db() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    state=self.store._state(c)
+                    from .brain import ensure
+                    b=ensure(state)
+                    b.setdefault('failed_tasks',[]).append(job['payload']['url'])
+                    b['failed_tasks']=b['failed_tasks'][-100:]
+                    self.store._save(c,state)
             self.store.finish(job['id'], {'error': str(exc)[:500]}, 'failed')
         finally:
             self.active_epoch = None

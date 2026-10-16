@@ -32,12 +32,14 @@ def status(store, data):
         pet = current.setdefault('pet', {'bond': 0, 'interactions': 0, 'stage': 0, 'last_action': None})
         candidate = stage_for(current, [])
         if candidate > pet['stage'] and not current['paused'] and not current['stopped']:
+            candidate=min(candidate,pet['stage']+1)
             pet['stage'] = candidate
             store._event(c, 'digivolution', {'stage': candidate, 'form': FORMS[candidate],
                                              'reason': 'care/exploration game milestones; same brain identity retained'})
         store._save(c, current)
         return {**pet, 'form': FORMS[pet['stage']], 'name': '基尔兽', 'brain': current.get('brain', {}),
                 'simulated': True, 'forms': FORMS,
+                'paused':current['paused'],'stopped':current['stopped'],
                 'progress': {'feeds':pet.get('feed_count',0),'touches':pet.get('touch_count',0),
                     'learning_updates':current.get('brain',{}).get('updates',0),
                     'active_steps':current.get('brain',{}).get('steps',0),
