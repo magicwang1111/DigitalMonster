@@ -35,3 +35,13 @@
 远端项目根目录 `/root/autodl-tmp/DigitalMonster`，个体状态位于 `data/life.sqlite`。令牌在 `data/access.token`；本地连接令牌放在已忽略的 `data/remote.token`，不要提交。服务启动：`bash /root/autodl-tmp/DigitalMonster/app/scripts/remote-service.sh start`。
 
 测试：`python -m unittest discover -s tests -v`。
+
+## 探索记录与模型文件
+
+观察台“联网探索记录”显示任务状态、访问时间、实际网址、页面标题和已保存的内容原文。失败任务显示错误，未完成任务不伪造结果。成功读取会保存资料记忆、更新已完成课程和来源记录；这不意味着模型已经理解网页语义，也不会把下载网页宣称为模型训练。
+
+个人宠物网络的在线权重保存在远端 SQLite。桌面连接后每轮同步将带 SHA256 的网络快照原子保存到本地 `data/companion-model.json`。这是本地备份快照，当前桌面端仍连接服务器运行，不是完整离线模式。快照包含网络参数、内部驱动和观察窗口，不包含访问令牌或用户聊天原文；它仍属于个人存档，默认不提交 GitHub。
+
+GitHub 包含模型实现 `digitalmon/brain.py`、上游可塑性模块及真正用于创建新个体的初始参数 `digitalmon/model_defaults.json`。初始参数是未学习的模板，不冒充当前基尔兽训练后的权重。其他人下载代码后可创建自己的个体。
+
+行走动画现在依据对应待机形态的实际可见高度、脚底锚点缩放，而不是统一放大到220像素。四个主线形态的行走帧已重绘，使用交替腿步与对侧摆臂的循环。

@@ -4,6 +4,15 @@ from PIL import Image, ImageSequence
 
 
 class AnimationAssetTests(unittest.TestCase):
+    def test_walk_scale_and_feet_match_idle(self):
+        root=Path(__file__).resolve().parents[1]/'digitalmon/static/pet'
+        for form in ('guilmon','growlmon','wargrowlmon','gallantmon'):
+            with Image.open(root/f'{form}-idle.gif') as idle:
+                reference=idle.convert('RGBA').getbbox()
+            with Image.open(root/f'{form}-walk.gif') as gif:
+                boxes=[f.convert('RGBA').getbbox() for f in ImageSequence.Iterator(gif)]
+            self.assertLessEqual(max(b[3]-b[1] for b in boxes),reference[3]-reference[1]+1)
+            self.assertTrue(all(abs(b[3]-reference[3])<=1 for b in boxes))
     def test_articulated_feeding_assets_are_distinct_transparent_frames(self):
         root = Path(__file__).resolve().parents[1]/'digitalmon/static/pet'
         for name in ('guilmon', 'growlmon', 'wargrowlmon', 'gallantmon', 'gallantmon-cm', 'gallantmon-x'):

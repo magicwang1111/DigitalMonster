@@ -44,23 +44,33 @@ def export(source):
                 raise ValueError('empty animation frame')
             cells.append(cell.crop(box))
     scale = min(220/max(c.width for c in cells), 220/max(c.height for c in cells))
+    bottom=238
+    idle_path=ROOT/(source.stem.removesuffix('-walk')+'-idle.gif')
+    if source.stem.endswith('-walk') and idle_path.exists():
+        with Image.open(idle_path) as idle:
+            reference=idle.convert('RGBA').getbbox()
+        scale=(reference[3]-reference[1])/max(c.height for c in cells)
+        bottom=reference[3]
     frames=[]
     for cell in cells:
         cell=cell.resize((round(cell.width*scale),round(cell.height*scale)),Image.Resampling.NEAREST)
         frame=Image.new('RGBA',(256,256))
-        frame.alpha_composite(cell,((256-cell.width)//2,238-cell.height))
+        frame.alpha_composite(cell,((256-cell.width)//2,bottom-cell.height))
         pal=frame.convert('RGB').quantize(colors=255)
         pal=pal.point(lambda v:v+1)
         pal.putpalette([0,0,0]+pal.getpalette()[:765])
         pal.paste(0,mask=frame.getchannel('A').point(lambda a:255 if a<128 else 0))
         frames.append(pal)
+    duration=100 if source.stem.endswith('-walk') else 300 if '-to-' in source.stem else 180 if rows==3 else 400
     frames[0].save(ROOT/(source.stem+'.gif'),save_all=True,append_images=frames[1:],
-                   duration=180 if rows==3 else 400,loop=0,disposal=2,transparency=0,optimize=False)
-    return {'frames':len(frames),'duration_ms':180 if rows==3 else 400,
+                   duration=duration,loop=0,disposal=2,transparency=0,optimize=False)
+    return {'frames':len(frames),'duration_ms':duration,
             'method':'generated articulated mouth, arms, tail/cape poses','source':str(source.relative_to(ROOT))}
 
 if __name__=='__main__':
     manifest=json.loads((ROOT/'animations.json').read_text())
     for source in (ROOT/'sources').glob('*.png'):
+        if source.stem.endswith('-reference'):
+            continue
         manifest[source.stem]=export(source)
     (ROOT/'animations.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')

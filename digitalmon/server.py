@@ -53,6 +53,14 @@ def make_server(runtime, token, port=8765):
             if path == '/api/pet':
                 from .pet import status
                 return self.send(200, status(runtime.store, runtime.data))
+            if path == '/api/model':
+                import hashlib
+                brain=runtime.store.snapshot().get('brain',{})
+                raw=json.dumps(brain,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode('utf-8')
+                return self.send(200,{'schema':'digitalmonster-companion-v1','model':brain,
+                    'sha256':hashlib.sha256(raw).hexdigest(),'note':'personal network snapshot, not a language model'})
+            if path == '/api/explorations':
+                return self.send(200,runtime.store.explorations())
             if path == '/api/experiments':
                 reports = []
                 for p in sorted((runtime.data / 'research').glob('*/progress.json'))[-12:]:

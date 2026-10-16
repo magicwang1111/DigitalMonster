@@ -129,6 +129,20 @@ class Store:
             return [dict(r) for r in c.execute(
                 'SELECT * FROM memories WHERE instr(text,?)>0 ORDER BY id DESC LIMIT 30', (query,))]
 
+    def explorations(self):
+        records=[]
+        with self.db() as c:
+            for r in c.execute("SELECT * FROM jobs WHERE kind='research' ORDER BY id DESC LIMIT 30"):
+                record=dict(r)
+                record['payload']=json.loads(r['payload'])
+                record['result']=json.loads(r['result']) if r['result'] else {}
+                mid=record['result'].get('memory_id')
+                memory=c.execute('SELECT text,source,ts FROM memories WHERE id=?',(mid,)).fetchone() if mid else None
+                record['memory']=dict(memory) if memory else None
+                record['effect']='成功时保存资料和来源、更新课程；不代表已理解内容或进行了语义训练'
+                records.append(record)
+        return records
+
     def enqueue(self, kind, payload):
         if kind not in ('research', 'train'):
             raise ValueError('unknown capability')

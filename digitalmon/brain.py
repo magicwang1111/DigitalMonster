@@ -2,14 +2,14 @@
 import math
 import random
 import time
+import json
+from pathlib import Path
 
 ACTIONS = ('observe','ask_food','seek_touch','rest')
 
 def ensure(state):
     if 'brain' not in state:
-        state['brain']={'id':state['id'], 'weights':[[0.0]*4 for _ in range(5)],
-            'needs':[0.4,0.4,0.4,0.0], 'updates':0,'steps':0,'action':'observe',
-            'probabilities':[.25]*4,'inputs':[1,.4,.4,.4,0], 'last_feedback':None}
+        state['brain']={'id':state['id'],**json.loads(Path(__file__).with_name('model_defaults.json').read_text(encoding='utf-8'))}
     return state['brain']
 
 def forward(brain):

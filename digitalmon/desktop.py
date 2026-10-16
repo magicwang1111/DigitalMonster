@@ -171,6 +171,11 @@ class Companion:
                         path.write_text(proc.stdout.strip(), encoding='utf-8')
                     self.token = path.read_text(encoding='utf-8').strip()
                 pet = self.api('/api/pet')
+                snapshot=self.api('/api/model')
+                local=ROOT/'data/companion-model.json'
+                temp=local.with_suffix('.tmp')
+                temp.write_text(json.dumps(snapshot,ensure_ascii=False,indent=2),encoding='utf-8')
+                os.replace(temp,local)
                 self.connected = True
                 self.messages.put(('state', pet))
             except Exception as exc:
