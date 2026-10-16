@@ -32,10 +32,10 @@ class PetTests(unittest.TestCase):
         self.assertEqual(stage_for(base, []), 0)
         evidence = [{'size': 9, 'seed': 11, 'status': 'completed', 'test': {'success_rate': .95}},
                     {'size': 9, 'seed': 23, 'status': 'completed', 'test': {'success_rate': .96}}]
-        self.assertEqual(stage_for(base, evidence), 1)
+        self.assertEqual(stage_for(base, evidence), 0)
         evidence += [{'size': 21, 'seed': 31, 'status': 'completed', 'test': {'success_rate': .95}},
                      {'size': 21, 'seed': 37, 'status': 'completed', 'test': {'success_rate': .96}}]
-        self.assertEqual(stage_for(base, evidence), 2)
+        self.assertEqual(stage_for(base, evidence), 0)
 
     def test_invalid_interaction_is_rejected(self):
         from digitalmon.pet import interact

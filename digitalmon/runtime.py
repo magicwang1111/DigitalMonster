@@ -86,7 +86,7 @@ class Runtime:
             pending = c.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
             research_count = c.execute("SELECT COUNT(*) FROM jobs WHERE kind='research'").fetchone()[0]
         if not pending and time.time()-latest >= self.config['autonomous_interval_seconds']:
-            if self.within_budget('train'):
+            if self.config.get('autonomous_navigation_training', False) and self.within_budget('train'):
                 self.queue('train', {'seed': 7 + self.store.snapshot()['episode']})
             urls = ['https://docs.python.org/3/library/random.html',
                     'https://docs.python.org/3/library/sqlite3.html',
@@ -157,7 +157,8 @@ class Runtime:
     def activity_loop(self):
         while not self.shutdown.is_set():
             try:
-                self.store.tick()
+                from .brain import tick
+                tick(self.store)
             except Exception as exc:
                 print(f'activity error: {exc}', file=sys.stderr, flush=True)
             self.shutdown.wait(0.5)

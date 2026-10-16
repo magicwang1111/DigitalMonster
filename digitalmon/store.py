@@ -23,7 +23,7 @@ class Store:
                     kind TEXT, status TEXT, payload TEXT, result TEXT);
                 CREATE TABLE IF NOT EXISTS policies (id INTEGER PRIMARY KEY, ts REAL, policy TEXT, metrics TEXT);
             ''')
-            state = {'id': str(uuid.uuid4()), 'name': '初生', 'born': time.time(), 'ticks': 0,
+            state = {'id': str(uuid.uuid4()), 'name': '基尔兽', 'born': time.time(), 'ticks': 0,
                      'paused': False, 'stopped': False, 'control_epoch': 0, 'episode': 0, 'world': initial(0),
                      'policy_version': 0, 'total_reward': 0.0, 'resources_collected': 0}
             c.execute('INSERT OR IGNORE INTO life VALUES(1,?)', (json.dumps(state),))

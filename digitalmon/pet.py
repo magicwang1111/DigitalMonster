@@ -7,17 +7,7 @@ FORMS = ['基尔兽', '古拉兽', '大古拉兽', '红莲骑士兽']
 
 
 def stage_for(state, reports):
-    stage = 0
-    small = {r.get('seed') for r in reports if r.get('status') == 'completed' and
-             r.get('size', 9) == 9 and r.get('test', {}).get('success_rate', 0) >= .90}
-    large = {r.get('seed') for r in reports if r.get('status') == 'completed' and
-             r.get('size') == 21 and r.get('test', {}).get('success_rate', 0) >= .90}
-    if len(small) >= 2 and state['policy_version'] > 0 and state['ticks'] >= 7200 and state['memory_count'] >= 3:
-        stage = 1
-    if stage == 1 and len(large) >= 2 and state['ticks'] >= 21600 and state['memory_count'] >= 10:
-        stage = 2
-    # Ultimate is intentionally not awarded for more navigation: broader task domains must exist first.
-    return stage
+    return 0  # Navigation benchmarks are unrelated to companion development.
 
 
 def status(store, data):
@@ -40,11 +30,11 @@ def status(store, data):
             store._event(c, 'digivolution', {'stage': candidate, 'form': FORMS[candidate],
                                              'reason': 'measured benchmark and sustained activity milestones'})
         store._save(c, current)
-        return {**pet, 'form': FORMS[pet['stage']], 'name': current['name'],
+        return {**pet, 'form': FORMS[pet['stage']], 'name': '基尔兽', 'brain': current.get('brain', {}),
                 'simulated': True, 'forms': FORMS,
                 'requirements': ['基尔兽：初始形态',
-                    '古拉兽：两组 9×9 测试成功率 ≥90%，已采用学习策略，7200 次活动，3 条记忆',
-                    '大古拉兽：另有两组 21×21 测试成功率 ≥90%，21600 次活动，10 条记忆',
+                    '古拉兽：宠物学习评测尚未定义，暂不自动解锁',
+                    '大古拉兽：需验证实际互动能力，暂不自动解锁',
                     '红莲骑士兽：需实现并通过其他领域的能力评测，目前尚未开放',
                     'CM / X 抗体：后续形态，目前尚未开放'],
                 'capability_note': '亲密度与外观是模拟状态；不代表意识。当前语言回复为规则回执。'}
@@ -55,6 +45,8 @@ def interact(store, action):
                'play': '一起玩的时刻已经记下来了。'}
     if action not in replies:
         raise ValueError('unknown interaction')
+    from .brain import feedback
+    feedback(store, action)
     with store.db() as c:
         c.execute('BEGIN IMMEDIATE')
         s = store._state(c)

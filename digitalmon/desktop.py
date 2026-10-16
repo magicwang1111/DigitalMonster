@@ -23,7 +23,7 @@ BASE = 'http://127.0.0.1:8765'
 class Companion:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title('初生 · 基尔兽')
+        self.root.title('基尔兽')
         self.root.geometry('330x410+1100+450')
         self.root.configure(bg='#111827')
         self.root.attributes('-topmost', True)
@@ -39,7 +39,7 @@ class Companion:
         self.frame_number = 0
         self.connected = False
         self.popup = None
-        self.name = tk.StringVar(value='初生 · 基尔兽')
+        self.name = tk.StringVar(value='基尔兽')
         self.bubble = tk.StringVar(value='正在连接她的记忆与世界……')
         tk.Label(self.root, textvariable=self.name, bg='#111827', fg='#e5e7eb',
                  font=('Microsoft YaHei UI', 14, 'bold')).pack(pady=(10,0))
@@ -159,10 +159,10 @@ class Companion:
                         self.animation = 'evolve'
                         self.animation_until = time.monotonic()+2.4
                         self.frame_number = 0
-                    self.name.set(value['name']+' · '+(value['form'] if self.form_override is None else
+                    self.name.set((value['form'] if self.form_override is None else
                         ['基尔兽','古拉兽','大古拉兽','红莲骑士兽','红莲骑士兽 CM','红莲骑士兽 X'][self.form_override]+'（预览）'))
                     if not getattr(self, 'notice_until', 0) > time.monotonic():
-                        self.bubble.set('陪伴记录 '+str(value['interactions'])+' 次 · 亲密度 '+str(value['bond'])+'\n双击我打开互动，右键查看控制菜单')
+                        self.bubble.set('行为：'+{'observe':'观察','ask_food':'想吃面包','seek_touch':'想被摸摸','rest':'休息'}.get(value.get('brain',{}).get('action'),'观察')+' · 学习更新 '+str(value.get('brain',{}).get('updates',0))+' 次\n陪伴记录 '+str(value['interactions'])+' 次')
                 elif kind == 'animation':
                     self.animation = value
                     self.animation_until = time.monotonic() + (1.6 if value == 'bread' else 2.16)
@@ -171,7 +171,7 @@ class Companion:
                     self.bubble.set(value)
                     self.notice_until = time.monotonic()+8
                     if self.popup and self.popup.winfo_exists():
-                        self.history.insert('end', '初生（系统回执）：'+value+'\n\n')
+                        self.history.insert('end', '基尔兽（系统回执）：'+value+'\n\n')
                         self.history.see('end')
         except queue.Empty:
             pass
@@ -199,7 +199,7 @@ class Companion:
             self.popup.lift()
             return
         self.popup = tk.Toplevel(self.root)
-        self.popup.title('与初生互动')
+        self.popup.title('与基尔兽互动')
         self.popup.geometry('480x420')
         self.history = tk.Text(self.popup, wrap='word', font=('Microsoft YaHei UI',11), bg='#111827', fg='#e5e7eb')
         self.history.pack(fill='both', expand=True)
