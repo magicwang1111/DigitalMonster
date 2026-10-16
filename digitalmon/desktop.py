@@ -22,7 +22,7 @@ BASE = 'http://127.0.0.1:8765'
 
 
 class Companion:
-    def __init__(self):
+    def __init__(self,messages=None):
         self.root = tk.Tk()
         self.root.title('基尔兽')
         self.root.geometry('330x410+1100+450')
@@ -34,8 +34,9 @@ class Companion:
             self.root.wm_attributes('-transparentcolor','#111827')
         self.token = ''
         self.tunnel = None
-        self.messages = queue.Queue()
+        self.messages = messages if messages is not None else queue.Queue()
         self.closed = threading.Event()
+        self.hidden=False
         self.stage = -1
         self.form_override = None
         self.animation = 'idle'
@@ -78,8 +79,9 @@ class Companion:
         self.canvas.bind('<B1-Motion>',self.drag)
         self.canvas.bind('<ButtonRelease-1>',self.end_drag)
         self.load_sprite(0)
-        self.root.protocol('WM_DELETE_WINDOW', self.close)
-        self.root.bind('<Escape>', lambda _:self.close())
+        self.root.protocol('WM_DELETE_WINDOW', self.hide)
+        self.root.bind('<Escape>', lambda _:self.hide())
+        self.setup_tray()
         self.animate()
         self.pump()
         threading.Thread(target=self.connect_loop, daemon=True).start()
@@ -211,6 +213,9 @@ class Companion:
     def animate(self):
         if self.closed.is_set():
             return
+        if self.hidden:
+            self.root.after(100,self.animate)
+            return
         if time.monotonic() > self.animation_until:
             self.animation = 'idle'
         now=time.monotonic()
@@ -246,7 +251,11 @@ class Companion:
         try:
             while True:
                 kind, value = self.messages.get_nowait()
-                if kind == 'state':
+                if kind == 'window':
+                    if value=='show':self.show()
+                    elif value=='hide':self.hide()
+                    elif value=='exit':self.close();return
+                elif kind == 'state':
                     self.pet = value
                     previous_stage = self.stage
                     self.load_sprite(self.form_override if self.form_override is not None else value['stage'])
@@ -345,18 +354,66 @@ class Companion:
         menu.add_command(label='继续活动',command=lambda:self.action('/api/control',{'action':'resume'}))
         menu.add_command(label='停止活动和实验',command=lambda:self.action('/api/control',{'action':'stop'}))
         menu.add_separator()
-        menu.add_command(label='关闭桌面窗口（服务器继续运行）',command=self.close)
+        menu.add_command(label='隐藏基尔兽（托盘或快捷方式可唤回）',command=self.hide)
+        menu.add_command(label='退出桌面程序（服务器继续运行）',command=self.close)
         menu.tk_popup(event.x_root,event.y_root)
+
+    def setup_tray(self):
+        self.tray=None
+        try:
+            import pystray
+            def command(action):
+                return lambda icon,item:self.messages.put(('window',action))
+            self.tray=pystray.Icon('DigitalMonster',Image.open(ROOT/'digitalmon/static/pet/pet.ico').convert('RGBA'),
+                '基尔兽',menu=pystray.Menu(
+                    pystray.MenuItem('显示基尔兽',command('show'),default=True),
+                    pystray.MenuItem('隐藏基尔兽',command('hide')),
+                    pystray.MenuItem('退出桌面程序',command('exit'))))
+            threading.Thread(target=self.tray.run,daemon=True).start()
+        except ImportError:
+            # Shortcut/BAT wakeup remains available without the optional tray package.
+            pass
+
+    def hide(self):
+        self.hidden=True
+        self.animation='idle';self.animation_until=0;self.move_target=None
+        self.root.withdraw()
+
+    def show(self):
+        self.hidden=False
+        self.root.deiconify();self.root.lift()
+        self.root.attributes('-topmost',True)
+        self.last_interaction=time.monotonic()
+        self.next_wander=self.last_interaction+10
+        from .motion import work_areas
+        areas=work_areas(self.root)
+        x,y=self.root.winfo_x(),self.root.winfo_y()
+        if not any(left<=x<=right-100 and top<=y<=bottom-100 for left,top,right,bottom in areas):
+            left,top,right,bottom=areas[0]
+            self.place_window(left+max(0,(right-left-330)//2),top+max(0,(bottom-top-410)//2))
 
     def close(self):
         self.closed.set()
+        if getattr(self,'tray',None):self.tray.stop()
         # Closing the visual companion is not a request to stop the remote organism.
         self.root.destroy()
 
 
 def main():
-    app = Companion()
-    app.root.mainloop()
+    import hashlib
+    from .desktop_lifecycle import InstanceBridge
+    port=40000+int(hashlib.sha256(str(ROOT).lower().encode()).hexdigest()[:8],16)%20000
+    messages=queue.Queue()
+    try:
+        bridge=InstanceBridge(lambda message:messages.put(('window',message)),port)
+    except OSError:
+        if InstanceBridge.notify(port):return
+        raise RuntimeError('桌面唤醒端口被其他程序占用，未创建重复窗口')
+    try:
+        app = Companion(messages)
+        app.root.mainloop()
+    finally:
+        bridge.close()
 
 
 if __name__ == '__main__':
