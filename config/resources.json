@@ -1,0 +1,11 @@
+{
+  "paid_services": false,
+  "max_network_jobs_per_day": 24,
+  "max_training_jobs_per_day": 12,
+  "autonomous_interval_seconds": 3600,
+  "resources": [
+    {"id": "local-4090d", "host": "local", "gpu": "NVIDIA GeForce RTX 4090 D", "gpu_indices": [0], "root": "E:/DigitalMonster", "enabled": true, "role": "optional training worker"},
+    {"id": "remote-5090", "host": "seetacloud-5090x2", "gpu": "NVIDIA GeForce RTX 5090", "gpu_indices": [0, 1], "root": "/root/autodl-tmp/DigitalMonster", "enabled": true, "role": "organism service and training workers"}
+  ]
+}
+
